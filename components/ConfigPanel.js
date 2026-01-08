@@ -10,19 +10,45 @@ export default defineComponent({
   setup(props, { emit }) {
     const fileInputRef = ref(null);
 
-    const handleFileUpload = (e) => {
+    const readFileContent = (file) => {
+      return new Promise((resolve) => {
+        // For text-based files (CSV, JSON, TXT), read the content
+        if (file.type === "text/csv" || file.type === "application/json" || file.type === "text/plain" || file.name.endsWith('.csv') || file.name.endsWith('.txt')) {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target.result);
+          reader.onerror = () => resolve("[Error reading file content]");
+          reader.readAsText(file);
+        } else {
+          // For binary files (like PDF/XLSX) without a specialized parser library, 
+          // we just resolve with a placeholder or null for now.
+          // ideally we would use libraries like 'xlsx' or 'pdfjs-dist' here.
+          resolve(null); 
+        }
+      });
+    };
+
+    const handleFileUpload = async (e) => {
       if (e.target.files && e.target.files[0]) {
         const file = e.target.files[0];
+        
+        // Read file content
+        const content = await readFileContent(file);
+
         const newFile = {
           id: Date.now().toString(),
           name: file.name,
           type: file.type,
           size: file.size,
+          content: content // Store the actual content
         };
+        
         emit('update-agent', {
           ...props.agent,
           files: [...props.agent.files, newFile]
         });
+        
+        // Reset input
+        e.target.value = '';
       }
     };
 
@@ -80,9 +106,13 @@ export default defineComponent({
                   <div class="bg-green-100 text-green-600 p-2 rounded-lg">
                     <FileSpreadsheet :size="18" />
                   </div>
-                  <span class="text-sm font-medium text-slate-700 truncate max-w-[180px]" :title="file.name">
-                    {{ file.name }}
-                  </span>
+                  <div class="flex flex-col overflow-hidden">
+                    <span class="text-sm font-medium text-slate-700 truncate max-w-[180px]" :title="file.name">
+                      {{ file.name }}
+                    </span>
+                    <span class="text-[10px] text-slate-400" v-if="file.content">Content Loaded</span>
+                    <span class="text-[10px] text-orange-400" v-else>Binary/Metadata only</span>
+                  </div>
                 </div>
                 <button 
                   @click="removeFile(file.id)"
@@ -103,8 +133,9 @@ export default defineComponent({
                 ref="fileInputRef" 
                 class="hidden" 
                 @change="handleFileUpload"
-                accept=".csv,.xlsx,.xls,.pdf,.txt"
+                accept=".csv,.txt,.json,.md"
              />
+             <p class="text-[10px] text-slate-400 mb-2">Supported for analysis: .csv, .txt, .json</p>
              <button 
                 @click="triggerFileInput"
                 class="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center justify-center gap-2 w-full py-2 hover:bg-blue-50 rounded-lg transition-colors dashed border border-transparent hover:border-blue-200"
@@ -123,9 +154,6 @@ export default defineComponent({
             <div class="flex gap-2 text-xs">
                 <span class="flex items-center gap-1 cursor-pointer text-slate-900 font-medium">
                     <input type="checkbox" checked readonly class="rounded text-blue-600" /> 使用預設
-                </span>
-                <span class="flex items-center gap-1 cursor-pointer text-slate-400">
-                     自訂
                 </span>
             </div>
           </div>

@@ -15,6 +15,7 @@ export const sendMessageToGemini = async (
   history,
   newMessage,
   systemInstruction,
+  files = [], // New parameter: Array of uploaded files
   modelName = 'gemini-3-flash-preview'
 ) => {
   
@@ -24,6 +25,25 @@ export const sendMessageToGemini = async (
   }
 
   try {
+    // 1. Construct File Context
+    let fileContext = "";
+    if (files && files.length > 0) {
+      fileContext += "\n\n=== UPLOADED KNOWLEDGE BASE ===\n";
+      files.forEach(file => {
+        if (file.content) {
+          // Truncate very large files to avoid basic token limits if necessary, 
+          // though Flash models handle large context well.
+          const contentPreview = file.content.substring(0, 50000); 
+          fileContext += `\n--- File: ${file.name} ---\n${contentPreview}\n`;
+        } else {
+          fileContext += `\n--- File: ${file.name} (Binary Content - Metadata Only) ---\nSize: ${file.size} bytes\n`;
+        }
+      });
+      fileContext += "\n=== END KNOWLEDGE BASE ===\n";
+      fileContext += "Instructions: You are to use the data provided in the 'UPLOADED KNOWLEDGE BASE' above to answer the user's questions. Analyze the data row by row if necessary.";
+    }
+
+    // 2. Prepare Contents
     const contents = history.map(msg => ({
       role: msg.role,
       parts: [{ text: msg.text }]
@@ -34,12 +54,16 @@ export const sendMessageToGemini = async (
       parts: [{ text: newMessage }]
     });
 
+    // 3. Call API
+    // We append the file context to the systemInstruction to ensure it persists as 'background knowledge'
+    const fullSystemInstruction = systemInstruction + fileContext;
+
     const response = await ai.models.generateContent({
       model: modelName,
       contents: contents,
       config: {
-        systemInstruction: systemInstruction,
-        temperature: 0.7,
+        systemInstruction: fullSystemInstruction,
+        temperature: 0.4, // Lower temperature for more accurate data analysis
       }
     });
 

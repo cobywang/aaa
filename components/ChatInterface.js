@@ -41,17 +41,19 @@ export default defineComponent({
       emit('update-agent', { ...props.agent, messages: newHistory });
       
       const currentPrompt = props.agent.systemPrompt;
+      const currentFiles = props.agent.files; // Get current files
       const userText = input.value;
       input.value = '';
       isLoading.value = true;
       
       await scrollToBottom();
 
-      // Call Gemini
+      // Call Gemini with files
       const response = await sendMessageToGemini(
         newHistory,
         userText,
-        currentPrompt
+        currentPrompt,
+        currentFiles
       );
 
       const botMessage = {
